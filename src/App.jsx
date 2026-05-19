@@ -117,6 +117,7 @@ const CSS=`
     .main-wrap{margin-left:0!important;padding-bottom:80px!important}
     .g3{grid-template-columns:repeat(3,1fr)!important}
     .g2{grid-template-columns:1fr!important}
+    #mob-back{display:block!important}
   }
 `;
 const C={
@@ -187,13 +188,13 @@ export default function App(){
   const[works,setWorks]=useState([]);
 
   useEffect(()=>{
-    Promise.all([db.get('p_lang','zh'),db.get('p_stu',[]),db.get('p_cls',[]),db.get('p_wrk',[])])
+    Promise.all([db.get('p_lang','zh'),db.get('p_stu',[],true),db.get('p_cls',[],true),db.get('p_wrk',[],true)])
       .then(([l,s,c,w])=>{setLang(l);setStudents(s);setClasses(c);setWorks(w);setReady(true);});
   },[]);
   useEffect(()=>{if(ready)db.set('p_lang',lang);},[lang,ready]);
-  useEffect(()=>{if(ready)db.set('p_stu',students);},[students,ready]);
-  useEffect(()=>{if(ready)db.set('p_cls',classes);},[classes,ready]);
-  useEffect(()=>{if(ready)db.set('p_wrk',works);},[works,ready]);
+  useEffect(()=>{if(ready)db.set('p_stu',students,true);},[students,ready]);
+  useEffect(()=>{if(ready)db.set('p_cls',classes,true);},[classes,ready]);
+  useEffect(()=>{if(ready)db.set('p_wrk',works,true);},[works,ready]);
   useEffect(()=>{if(ready)db.set('s_students',students,true);},[students,ready]);
 
   const t=T[lang];
@@ -274,9 +275,7 @@ function TeacherLogin({onLogin,onBack,lang,setLang,t}){
         {resetMsg&&<div style={{background:'#f0fdf4',color:'#166534',padding:'9px 13px',borderRadius:8,fontSize:13,fontWeight:600,marginBottom:14}}>{resetMsg}</div>}
         <div style={C.fg}><label style={C.lbl}>{t.pwd}</label><input style={C.inp} type="password" value={pwd} placeholder={t.pwdPh} onChange={e=>setPwd(e.target.value)} onKeyDown={e=>e.key==='Enter'&&tryLogin()} autoFocus/></div>
         <Btn v="green" full onClick={tryLogin}>🔐 {t.loginBtn}</Btn>
-        <p style={{textAlign:'center',fontSize:11,color:'#9ca3af',marginTop:12}}>{t.defPwd}</p>
-        {/* ✅ Reset password button */}
-        <button onClick={resetPassword} style={{display:'block',width:'100%',marginTop:10,background:'none',border:'none',color:'#9ca3af',fontSize:11.5,cursor:'pointer',textDecoration:'underline',fontFamily:'inherit'}}>
+        <button onClick={resetPassword} style={{display:'block',width:'100%',marginTop:12,background:'none',border:'none',color:'#d1d5db',fontSize:11,cursor:'pointer',textDecoration:'underline',fontFamily:'inherit'}}>
           {t.resetPwd}
         </button>
       </div>
@@ -472,6 +471,22 @@ function StuWorksPanel({student,myWorks,allWorks,setWorks,classes,t}){
   const fileRef=useRef();
   const handleFile=async e=>{const file=e.target.files[0];if(file)f({imgData:await compressImg(file)});};
 
+  // ✅ 粘贴图片功能 (Ctrl+V)
+  useEffect(()=>{
+    if(!showForm)return;
+    const onPaste=async e=>{
+      for(const item of(e.clipboardData?.items||[])){
+        if(item.type.startsWith('image/')){
+          const file=item.getAsFile();
+          if(file)f({imgData:await compressImg(file)});
+          break;
+        }
+      }
+    };
+    document.addEventListener('paste',onPaste);
+    return()=>document.removeEventListener('paste',onPaste);
+  },[showForm]);
+
   const save=async()=>{
     if(!form.title.trim())return;
     const newWork={...form,id:uid(),studentId:student.id,date:today(),uploadedByStudent:true};
@@ -496,7 +511,16 @@ function StuWorksPanel({student,myWorks,allWorks,setWorks,classes,t}){
           <div style={C.fg}><label style={C.lbl}>{t.stuWTitle} *</label><input style={C.inp} value={form.title} onChange={e=>f({title:e.target.value})} autoFocus/></div>
           <div style={C.fg}><label style={C.lbl}>{t.stuWDesc}</label><textarea style={{...C.inp,resize:'vertical',minHeight:70}} value={form.desc} onChange={e=>f({desc:e.target.value})}/></div>
           {classes.length>0&&<div style={C.fg}><label style={C.lbl}>{t.wCls}</label><select style={{...C.inp,...SEL}} value={form.classId} onChange={e=>f({classId:e.target.value})}><option value="">--</option>{[...classes].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(c=><option key={c.id} value={c.id}>{c.date} — {c.topic}</option>)}</select></div>}
-          <div style={C.fg}><label style={C.lbl}>{t.wImg}</label><input type="file" accept="image/*" ref={fileRef} style={{display:'none'}} onChange={handleFile}/><Btn v="ghost" onClick={()=>fileRef.current.click()} style={{width:'100%',justifyContent:'center'}}>📷 {t.wImg}</Btn>{form.imgData&&<img src={form.imgData} alt="preview" style={{width:'100%',marginTop:8,borderRadius:8,aspectRatio:'16/9',objectFit:'cover'}}/>}</div>
+          <div style={C.fg}>
+            <label style={C.lbl}>{t.wImg}</label>
+            <input type="file" accept="image/*" ref={fileRef} style={{display:'none'}} onChange={handleFile}/>
+            <div style={{display:'flex',gap:8}}>
+              <Btn v="ghost" onClick={()=>fileRef.current.click()} style={{flex:1,justifyContent:'center'}}>📷 {t.wImg}</Btn>
+              <Btn v="ghost" onClick={()=>document.execCommand('paste')} style={{flex:1,justifyContent:'center'}}>📋 Ctrl+V 粘贴</Btn>
+            </div>
+            <div style={{fontSize:11,color:'#9ca3af',marginTop:5,textAlign:'center'}}>截图后可直接按 Ctrl+V 粘贴</div>
+            {form.imgData&&<img src={form.imgData} alt="preview" style={{width:'100%',marginTop:8,borderRadius:8,aspectRatio:'16/9',objectFit:'cover'}}/>}
+          </div>
           <div style={C.fg}><label style={C.lbl}>🔗 {t.wLink}</label><input style={C.inp} value={form.workUrl} placeholder="https://..." onChange={e=>f({workUrl:e.target.value})}/></div>
           <div style={{display:'flex',gap:8}}><Btn v="outline" onClick={()=>setShowForm(false)}>{t.cancel}</Btn><Btn v="green" disabled={!form.title.trim()} onClick={save}>✅ {t.save}</Btn></div>
         </div>
@@ -602,6 +626,12 @@ function TeacherApp({students,setStudents,classes,setClasses,works,setWorks,lang
         </div>
       </aside>
       <main className="main-wrap" style={{flex:1,marginLeft:210,padding:'22px 22px 40px',overflowX:'hidden',minHeight:'100vh'}}>
+        {/* ✅ Mobile back button */}
+        {page!=='dashboard'&&<div style={{display:'none'}} id="mob-back">
+          <button onClick={()=>setPage('dashboard')} style={{display:'flex',alignItems:'center',gap:6,background:'none',border:'none',color:'#16a34a',fontWeight:700,fontSize:14,cursor:'pointer',marginBottom:14,fontFamily:'inherit',padding:0}}>
+            ← {t.n.home}
+          </button>
+        </div>}
         <div key={page} className="fi">
           {page==='dashboard'&&<Dashboard {...props}/>}
           {page==='students'&&<Students {...props}/>}
@@ -612,7 +642,7 @@ function TeacherApp({students,setStudents,classes,setClasses,works,setWorks,lang
         </div>
       </main>
       <nav className="bnav" style={{display:'none',position:'fixed',bottom:0,left:0,right:0,background:'#064e3b',zIndex:100}}>
-        {nav.slice(0,5).map(({id,ic,l})=><div key={id} onClick={()=>setPage(id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,padding:'6px 4px',cursor:'pointer',color:page===id?'#34d399':'rgba(255,255,255,.52)',fontSize:10,fontWeight:700}}><span style={{fontSize:20}}>{ic}</span>{l}</div>)}
+        {nav.map(({id,ic,l})=><div key={id} onClick={()=>setPage(id)} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:1,padding:'5px 2px',cursor:'pointer',color:page===id?'#34d399':'rgba(255,255,255,.52)',fontSize:9,fontWeight:700}}><span style={{fontSize:18}}>{ic}</span>{l}</div>)}
       </nav>
     </div>
   );
@@ -660,6 +690,7 @@ function Dashboard({students,classes,works,t,setPage}){
 /* ── Students ────────────────────────────────── */
 function Students({students,setStudents,t}){
   const[modal,setModal]=useState(null);const[del,setDel]=useState(null);const[search,setSearch]=useState('');
+  const[detail,setDetail]=useState(null); // ✅ detail view
   const blank={name:'',grade:'',hobby:'',favItem:'',notes:''};const[form,setForm]=useState(blank);
   const f=v=>setForm(p=>({...p,...v}));
   const save=()=>{if(!form.name.trim())return;if(modal==='add')setStudents(p=>[...p,{...form,id:uid()}]);else setStudents(p=>p.map(s=>s.id===modal.id?{...s,...form}:s));setModal(null);};
@@ -673,8 +704,14 @@ function Students({students,setStudents,t}){
           {filtered.map(s=>(
             <div key={s.id} style={{...C.card,padding:'16px'}}>
               <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:10}}>
-                <Avatar name={s.name}/>
-                <div style={{flex:1,minWidth:0}}><div style={{fontWeight:800,fontSize:15}}>{s.name}</div>{s.grade&&<div style={{fontSize:11.5,color:'#6b7280'}}>{s.grade}</div>}</div>
+                {/* ✅ Click avatar/name to view details */}
+                <div onClick={()=>setDetail(s)} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:12,flex:1,minWidth:0}}>
+                  <Avatar name={s.name}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:800,fontSize:15,color:'#064e3b',textDecoration:'underline',textDecorationColor:'#d1fae5'}}>{s.name}</div>
+                    {s.grade&&<div style={{fontSize:11.5,color:'#6b7280'}}>{s.grade}</div>}
+                  </div>
+                </div>
                 <div style={{display:'flex',gap:5}}><Btn v="ghost" size="sm" onClick={()=>{setForm({name:s.name,grade:s.grade||'',hobby:s.hobby||'',favItem:s.favItem||'',notes:s.notes||''});setModal(s);}}>✏️</Btn><Btn v="red" size="sm" onClick={()=>setDel(s)}>🗑️</Btn></div>
               </div>
               {(s.hobby||s.favItem)&&<div style={{display:'flex',flexWrap:'wrap',gap:5,paddingTop:8,borderTop:'1px solid #f3f4f6'}}>{s.hobby&&<Badge c="green">❤️ {s.hobby}</Badge>}{s.favItem&&<Badge c="gold">⭐ {s.favItem}</Badge>}</div>}
@@ -689,6 +726,20 @@ function Students({students,setStudents,t}){
         <div style={C.fg}><label style={C.lbl}>❤️ {t.hobby}</label><input style={C.inp} value={form.hobby} placeholder="e.g. 画画、打篮球" onChange={e=>f({hobby:e.target.value})}/></div>
         <div style={C.fg}><label style={C.lbl}>⭐ {t.favItem}</label><input style={C.inp} value={form.favItem} placeholder="e.g. 乐高、恐龙玩具" onChange={e=>f({favItem:e.target.value})}/></div>
         <div style={C.fg}><label style={C.lbl}>{t.notes}</label><textarea style={{...C.inp,resize:'vertical',minHeight:70}} value={form.notes} onChange={e=>f({notes:e.target.value})}/></div>
+      </Modal>}
+      {/* ✅ Student detail view modal */}
+      {detail&&<Modal title={detail.name} onClose={()=>setDetail(null)} footer={<><Btn v="outline" onClick={()=>setDetail(null)}>{t.close}</Btn><Btn v="ghost" onClick={()=>{setForm({name:detail.name,grade:detail.grade||'',hobby:detail.hobby||'',favItem:detail.favItem||'',notes:detail.notes||''});setModal(detail);setDetail(null);}}>✏️ {t.edit}</Btn></>}>
+        <div style={{textAlign:'center',marginBottom:20}}>
+          <Avatar name={detail.name} size={64}/>
+          <div className="fredoka" style={{fontSize:22,color:'#064e3b',marginTop:10}}>{detail.name}</div>
+          {detail.grade&&<div style={{fontSize:13,color:'#6b7280',marginTop:3}}>{detail.grade}</div>}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          {detail.hobby&&<div style={{background:'#f0fdf4',borderRadius:10,padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:20}}>❤️</span><div><div style={{fontSize:11,fontWeight:700,color:'#6b7280',marginBottom:2}}>{t.hobby}</div><div style={{fontSize:14,fontWeight:700}}>{detail.hobby}</div></div></div>}
+          {detail.favItem&&<div style={{background:'#fffbeb',borderRadius:10,padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:20}}>⭐</span><div><div style={{fontSize:11,fontWeight:700,color:'#6b7280',marginBottom:2}}>{t.favItem}</div><div style={{fontSize:14,fontWeight:700}}>{detail.favItem}</div></div></div>}
+          {detail.notes&&<div style={{background:'#f9fafb',borderRadius:10,padding:'12px 14px',display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:20}}>📝</span><div><div style={{fontSize:11,fontWeight:700,color:'#6b7280',marginBottom:2}}>{t.notes}</div><div style={{fontSize:14}}>{detail.notes}</div></div></div>}
+          {!detail.hobby&&!detail.favItem&&!detail.notes&&<div style={{textAlign:'center',color:'#9ca3af',fontSize:13,padding:'10px 0'}}>暂无详细资料，点击编辑添加</div>}
+        </div>
       </Modal>}
       {del&&<Modal title="⚠️" onClose={()=>setDel(null)} footer={<><Btn v="outline" onClick={()=>setDel(null)}>{t.cancel}</Btn><Btn v="red" onClick={()=>{setStudents(p=>p.filter(s=>s.id!==del.id));setDel(null);}}>🗑️ {t.del}</Btn></>}><p style={{fontSize:14}}>{t.confirmDel}</p><p style={{fontWeight:700,marginTop:8}}>{del.name}</p></Modal>}
     </div>
@@ -745,6 +796,22 @@ function Works({works,setWorks,students,classes,t}){
   const blank={title:'',desc:'',studentId:'',classId:'',imgData:'',workUrl:''};const[form,setForm]=useState(blank);
   const f=v=>setForm(p=>({...p,...v}));const fileRef=useRef();
   const handleFile=async e=>{const file=e.target.files[0];if(file)f({imgData:await compressImg(file)});};
+
+  // ✅ 粘贴图片 (Ctrl+V)
+  useEffect(()=>{
+    if(!modal)return;
+    const onPaste=async e=>{
+      for(const item of(e.clipboardData?.items||[])){
+        if(item.type.startsWith('image/')){
+          const file=item.getAsFile();
+          if(file)f({imgData:await compressImg(file)});
+          break;
+        }
+      }
+    };
+    document.addEventListener('paste',onPaste);
+    return()=>document.removeEventListener('paste',onPaste);
+  },[modal]);
   const save=()=>{if(!form.title.trim()||!form.studentId)return;setWorks(p=>[...p,{...form,id:uid(),date:today()}]);setModal(false);setForm(blank);};
   const sorted=[...works].filter(w=>filter==='all'||w.studentId===filter).sort((a,b)=>new Date(b.date)-new Date(a.date));
   return(
@@ -780,7 +847,16 @@ function Works({works,setWorks,students,classes,t}){
         <div style={C.fg}><label style={C.lbl}>{t.wStu} *</label><select style={{...C.inp,...SEL}} value={form.studentId} onChange={e=>f({studentId:e.target.value})}><option value="">--</option>{students.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div style={C.fg}><label style={C.lbl}>{t.wCls}</label><select style={{...C.inp,...SEL}} value={form.classId} onChange={e=>f({classId:e.target.value})}><option value="">--</option>{[...classes].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(c=><option key={c.id} value={c.id}>{c.date} — {c.topic}</option>)}</select></div>
         <div style={C.fg}><label style={C.lbl}>{t.wDesc}</label><textarea style={{...C.inp,resize:'vertical',minHeight:70}} value={form.desc} onChange={e=>f({desc:e.target.value})}/></div>
-        <div style={C.fg}><label style={C.lbl}>{t.wImg}</label><input type="file" accept="image/*" ref={fileRef} style={{display:'none'}} onChange={handleFile}/><Btn v="ghost" onClick={()=>fileRef.current.click()} style={{width:'100%',justifyContent:'center'}}>📷 {t.wImg}</Btn>{form.imgData&&<img src={form.imgData} alt="preview" style={{width:'100%',marginTop:8,borderRadius:8,aspectRatio:'16/9',objectFit:'cover'}}/>}</div>
+        <div style={C.fg}>
+          <label style={C.lbl}>{t.wImg}</label>
+          <input type="file" accept="image/*" ref={fileRef} style={{display:'none'}} onChange={handleFile}/>
+          <div style={{display:'flex',gap:8}}>
+            <Btn v="ghost" onClick={()=>fileRef.current.click()} style={{flex:1,justifyContent:'center'}}>📷 {t.wImg}</Btn>
+            <Btn v="ghost" style={{flex:1,justifyContent:'center'}}>📋 Ctrl+V 粘贴</Btn>
+          </div>
+          <div style={{fontSize:11,color:'#9ca3af',marginTop:5,textAlign:'center'}}>截图后可直接按 Ctrl+V 粘贴</div>
+          {form.imgData&&<img src={form.imgData} alt="preview" style={{width:'100%',marginTop:8,borderRadius:8,aspectRatio:'16/9',objectFit:'cover'}}/>}
+        </div>
         <div style={C.fg}><label style={C.lbl}>🔗 {t.wLink}</label><input style={C.inp} value={form.workUrl} placeholder="https://..." onChange={e=>f({workUrl:e.target.value})}/></div>
       </Modal>}
       {del&&<Modal title="⚠️" onClose={()=>setDel(null)} footer={<><Btn v="outline" onClick={()=>setDel(null)}>{t.cancel}</Btn><Btn v="red" onClick={()=>{setWorks(p=>p.filter(w=>w.id!==del.id));setDel(null);}}>🗑️ {t.del}</Btn></>}><p style={{fontSize:14}}>{t.confirmDel}</p><p style={{fontWeight:700,marginTop:8}}>{del.title}</p></Modal>}
@@ -1135,3 +1211,4 @@ function Settings({t,lang,setLang,students}){
     </div>
   );
 }
+
